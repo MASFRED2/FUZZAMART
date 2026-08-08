@@ -1,0 +1,11 @@
+@extends('layouts.master')
+@section('judul','Laporan Penjualan')
+@section('isi')
+<div class="row">
+    <div class="col-md-4"><div class="card bg-success text-white"><div class="card-body"><small>Total Penjualan Sukses</small><h3 class="font-weight-bold">Rp {{ number_format($totalPenjualan,0,',','.') }}</h3></div></div></div>
+    <div class="col-md-4"><div class="card bg-info text-white"><div class="card-body"><small>Jumlah Transaksi</small><h3 class="font-weight-bold">{{ $jumlahTransaksi }}</h3></div></div></div>
+    <div class="col-md-4"><div class="card bg-danger text-white"><div class="card-body"><small>Total Retur</small><h3 class="font-weight-bold">Rp {{ number_format($totalRetur,0,',','.') }}</h3></div></div></div>
+</div>
+<div class="card mb-3"><div class="card-body"><form method="GET" class="row align-items-end"><div class="col-md-4 mb-2"><label>Tanggal Awal</label><input type="date" name="tanggal_awal" value="{{ $tanggalAwal }}" class="form-control"></div><div class="col-md-4 mb-2"><label>Tanggal Akhir</label><input type="date" name="tanggal_akhir" value="{{ $tanggalAkhir }}" class="form-control"></div><div class="col-md-4 mb-2"><button class="btn btn-dark"><i class="fas fa-filter mr-1"></i>Tampilkan</button><button type="button" onclick="window.print()" class="btn btn-light ml-2"><i class="fas fa-print mr-1"></i>Cetak</button></div></form></div></div>
+<div class="card"><div class="card-body table-responsive p-0"><table class="table table-hover mb-0"><thead><tr><th>No</th><th>Invoice</th><th>Tanggal</th><th>Kasir</th><th>Metode</th><th>Status</th><th>Total</th></tr></thead><tbody>@forelse($penjualan as $p)<tr><td>{{ $loop->iteration }}</td><td>{{ $p->no_invoice }}</td><td>{{ $p->created_at->format('d/m/Y H:i') }}</td><td>{{ $p->kasir?->name ?? '-' }}</td><td>{{ strtoupper($p->metode_pembayaran) }}</td><td><span class="badge badge-{{ $p->status_pembayaran === 'retur' ? 'danger' : 'success' }}">{{ strtoupper($p->status_pembayaran) }}</span></td><td>Rp {{ number_format($p->total_harga,0,',','.') }}</td></tr>@empty<tr><td colspan="7" class="text-center text-muted py-4">Tidak ada data pada periode ini.</td></tr>@endforelse</tbody></table></div></div>
+@endsection
