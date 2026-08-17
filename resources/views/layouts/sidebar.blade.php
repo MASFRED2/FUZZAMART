@@ -48,6 +48,7 @@
                 @if(Auth::user()->role == 'admin')
                     <li class="nav-header">MASTER DATA</li>
                     <li class="nav-item"><a href="{{ route('barang.index') }}" class="nav-link {{ request()->is('barang*') ? 'active' : '' }}"><i class="nav-icon fas fa-box"></i><p>Data Barang</p></a></li>
+                    <li class="nav-item"><a href="{{ route('satuan.index') }}" class="nav-link {{ request()->is('satuan*') ? 'active' : '' }}"><i class="nav-icon fas fa-boxes"></i><p>Satuan & Kemasan</p></a></li>
                     <li class="nav-item"><a href="{{ route('kategori.index') }}" class="nav-link {{ request()->is('kategori*') ? 'active' : '' }}"><i class="nav-icon fas fa-tags"></i><p>Kategori</p></a></li>
                     <li class="nav-item"><a href="{{ route('stok-masuk.index') }}" class="nav-link {{ request()->is('stok-masuk*') ? 'active' : '' }}"><i class="nav-icon fas fa-truck-loading"></i><p>Stok Masuk</p></a></li>
                     <li class="nav-item"><a href="{{ route('stock-opname.index') }}" class="nav-link {{ request()->is('stock-opname*') ? 'active' : '' }}"><i class="nav-icon fas fa-clipboard-check"></i><p>Stock Opname</p></a></li>

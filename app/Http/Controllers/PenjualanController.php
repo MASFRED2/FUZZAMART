@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\AuditLog;
 use App\Models\Barang;
+use App\Models\BarangSatuan;
 use App\Models\KartuStok;
 use App\Models\Penjualan;
 use App\Models\PenjualanDetail;
@@ -60,34 +61,57 @@ class PenjualanController extends Controller
     {
         $keyword = trim(urldecode($keyword));
 
-        $barang = Barang::with('kategori')
+        $barangSatuan = BarangSatuan::with(['satuan', 'barang.kategori'])
             ->aktif()
-            ->where(function ($query) use ($keyword) {
-                $query->where('barcode', $keyword)
-                    ->orWhere('nama_barang', 'like', "%{$keyword}%");
-            })
-            ->orderByRaw('barcode = ? desc', [$keyword])
+            ->where('barcode', $keyword)
+            ->whereHas('barang', fn ($query) => $query->aktif())
             ->first();
 
-        if (!$barang) {
+        if (!$barangSatuan) {
+            $barang = Barang::with(['kategori', 'satuan_dasar.satuan'])
+                ->aktif()
+                ->where(function ($query) use ($keyword) {
+                    $query->where('barcode', $keyword)
+                        ->orWhere('nama_barang', 'like', "%{$keyword}%");
+                })
+                ->orderByRaw('barcode = ? desc', [$keyword])
+                ->first();
+
+            $barangSatuan = $barang?->satuan_dasar;
+        }
+
+        $barang = $barangSatuan?->barang;
+
+        if (!$barang || !$barangSatuan) {
             return response()->json([
                 'status' => 'error',
-                'message' => 'Barang tidak ditemukan atau sedang nonaktif.',
+                'message' => 'Barang atau satuan jual tidak ditemukan atau sedang nonaktif.',
             ], 404);
         }
+
+        $stokKemasan = (int) floor($barang->stok_total / max(1, $barangSatuan->konversi_satuan));
+        $diskonAktif = $barang->diskon_aktif();
 
         return response()->json([
             'status' => 'success',
             'data' => [
                 'id' => $barang->id,
-                'barcode' => $barang->barcode,
+                'barang_satuan_id' => $barangSatuan->id,
+                'barcode' => $barangSatuan->barcode,
                 'nama_barang' => $barang->nama_barang,
                 'kategori' => $barang->kategori?->nama_kategori,
-                'satuan' => $barang->satuan ?? 'pcs',
-                'stok_total' => (int) $barang->stok_total,
-                'harga_jual' => (float) $barang->harga_jual,
-                'harga_final' => $barang->hargaSetelahDiskon(),
-                'ada_diskon' => (bool) $barang->diskon_aktif(),
+                'satuan' => $barangSatuan->satuan?->simbol ?? $barang->satuan ?? 'pcs',
+                'konversi_satuan' => (int) $barangSatuan->konversi_satuan,
+                'stok_total' => $stokKemasan,
+                'stok_dasar' => (int) $barang->stok_total,
+                'harga_jual' => (float) $barangSatuan->harga_jual,
+                'harga_final' => $barangSatuan->hargaSetelahDiskon(),
+                'ada_diskon' => (bool) $diskonAktif,
+                'diskon' => $diskonAktif ? [
+                    'jenis' => $diskonAktif->jenis_diskon,
+                    'nilai' => (float) $diskonAktif->nilai_diskon,
+                    'minimal_beli' => (int) $diskonAktif->minimal_beli,
+                ] : null,
             ],
         ]);
     }
@@ -103,6 +127,7 @@ class PenjualanController extends Controller
         $validated = $request->validate([
             'keranjang' => ['required', 'array', 'min:1'],
             'keranjang.*.id' => ['required', 'exists:barang,id'],
+            'keranjang.*.barang_satuan_id' => ['required', 'exists:barang_satuan,id'],
             'keranjang.*.qty' => ['required', 'integer', 'min:1'],
             'metode_pembayaran' => ['required', 'in:cash,qris,debit,transfer'],
             'pelanggan_id' => ['nullable', 'exists:users,id'],
@@ -126,24 +151,40 @@ class PenjualanController extends Controller
 
                 $items = [];
                 $totalHarga = 0;
+                $jumlahDasarPerBarang = [];
 
                 foreach ($validated['keranjang'] as $item) {
-                    $barang = Barang::where('id', $item['id'])->aktif()->lockForUpdate()->first();
+                    $barangSatuan = BarangSatuan::with('satuan')
+                        ->aktif()
+                        ->where('id', $item['barang_satuan_id'])
+                        ->where('barang_id', $item['id'])
+                        ->first();
+
+                    if (!$barangSatuan) {
+                        throw new \Exception('Satuan jual tidak valid atau sudah dinonaktifkan. Muat ulang keranjang.');
+                    }
+
+                    $barang = Barang::where('id', $barangSatuan->barang_id)->aktif()->lockForUpdate()->first();
 
                     if (!$barang) {
                         throw new \Exception('Ada barang yang tidak ditemukan atau sudah nonaktif.');
                     }
 
-                    $qty = (int) $item['qty'];
-                    if ($barang->stok_total < $qty) {
-                        throw new \Exception("Stok {$barang->nama_barang} tidak mencukupi. Sisa stok: {$barang->stok_total}.");
+                    $qtyJual = (int) $item['qty'];
+                    $konversi = max(1, (int) $barangSatuan->konversi_satuan);
+                    $qtyDasar = $qtyJual * $konversi;
+                    $jumlahDasarPerBarang[$barang->id] = ($jumlahDasarPerBarang[$barang->id] ?? 0) + $qtyDasar;
+
+                    if ($barang->stok_total < $jumlahDasarPerBarang[$barang->id]) {
+                        $stokKemasan = (int) floor($barang->stok_total / $konversi);
+                        throw new \Exception("Stok {$barang->nama_barang} tidak mencukupi. Maksimal {$stokKemasan} {$barangSatuan->satuan?->simbol}.");
                     }
 
-                    $harga = $barang->hargaSetelahDiskon();
-                    $subtotal = $harga * $qty;
+                    $harga = $barangSatuan->hargaSetelahDiskon($qtyJual);
+                    $subtotal = $harga * $qtyJual;
                     $totalHarga += $subtotal;
 
-                    $items[] = compact('barang', 'qty', 'harga', 'subtotal');
+                    $items[] = compact('barang', 'barangSatuan', 'qtyJual', 'qtyDasar', 'konversi', 'harga', 'subtotal');
                 }
 
                 $totalBayar = $validated['metode_pembayaran'] === 'cash'
@@ -171,13 +212,17 @@ class PenjualanController extends Controller
                     PenjualanDetail::create([
                         'penjualan_id' => $penjualan->id,
                         'barang_id' => $item['barang']->id,
-                        'qty' => $item['qty'],
+                        'barang_satuan_id' => $item['barangSatuan']->id,
+                        'qty' => $item['qtyDasar'],
+                        'qty_jual' => $item['qtyJual'],
+                        'satuan_jual' => $item['barangSatuan']->satuan?->simbol ?? $item['barang']->satuan,
+                        'konversi_satuan' => $item['konversi'],
                         'harga_satuan' => $item['harga'],
                         'subtotal' => $item['subtotal'],
                     ]);
 
                     $stokSebelum = $item['barang']->stok_total;
-                    $item['barang']->decrement('stok_total', $item['qty']);
+                    $item['barang']->decrement('stok_total', $item['qtyDasar']);
                     $item['barang']->refresh();
 
                     KartuStok::create([
@@ -186,10 +231,10 @@ class PenjualanController extends Controller
                         'tipe' => 'keluar',
                         'referensi' => $penjualan->no_invoice,
                         'qty_masuk' => 0,
-                        'qty_keluar' => $item['qty'],
+                        'qty_keluar' => $item['qtyDasar'],
                         'stok_sebelum' => $stokSebelum,
                         'stok_sesudah' => $item['barang']->stok_total,
-                        'keterangan' => 'Penjualan barang melalui POS.',
+                        'keterangan' => 'Penjualan '.$item['qtyJual'].' '.($item['barangSatuan']->satuan?->simbol ?? $item['barang']->satuan).' melalui POS.',
                     ]);
                 }
 

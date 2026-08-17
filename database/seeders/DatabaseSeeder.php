@@ -3,9 +3,11 @@
 namespace Database\Seeders;
 
 use App\Models\Barang;
+use App\Models\BarangSatuan;
 use App\Models\Cabang;
 use App\Models\Kategori;
 use App\Models\Pemasok;
+use App\Models\Satuan;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
@@ -14,6 +16,8 @@ class DatabaseSeeder extends Seeder
 {
     public function run(): void
     {
+        $this->call(SatuanSeeder::class);
+
         $cabangUtama = Cabang::firstOrCreate(
             ['nama_cabang' => 'Fuzza Mart Pusat'],
             ['alamat' => 'Perum Puri Pasundan I RT 01 RW 07 Blok A No.5, Pangadegan, Pasar Kemis, Tangerang']
@@ -74,7 +78,7 @@ class DatabaseSeeder extends Seeder
         ];
 
         foreach ($barang as [$barcode, $nama, $kat, $jual, $beli, $stok, $min]) {
-            Barang::updateOrCreate(
+            $produk = Barang::updateOrCreate(
                 ['barcode' => $barcode],
                 [
                     'kategori_id' => $kategori[$kat]->id,
@@ -88,6 +92,31 @@ class DatabaseSeeder extends Seeder
                     'is_active' => true,
                 ]
             );
+
+            $pcs = Satuan::where('simbol', 'pcs')->firstOrFail();
+            BarangSatuan::updateOrCreate(
+                ['barang_id' => $produk->id, 'satuan_id' => $pcs->id],
+                [
+                    'barcode' => $barcode,
+                    'konversi_satuan' => 1,
+                    'harga_jual' => $jual,
+                    'is_default' => true,
+                    'is_active' => true,
+                ]
+            );
         }
+
+        $mie = Barang::where('barcode', '8991002101034')->firstOrFail();
+        $renteng = Satuan::where('simbol', 'renteng')->firstOrFail();
+        $dus = Satuan::where('simbol', 'dus')->firstOrFail();
+
+        BarangSatuan::updateOrCreate(
+            ['barang_id' => $mie->id, 'satuan_id' => $renteng->id],
+            ['barcode' => '8991002101134', 'konversi_satuan' => 10, 'harga_jual' => 33000, 'is_default' => false, 'is_active' => true]
+        );
+        BarangSatuan::updateOrCreate(
+            ['barang_id' => $mie->id, 'satuan_id' => $dus->id],
+            ['barcode' => '8991002101234', 'konversi_satuan' => 40, 'harga_jual' => 125000, 'is_default' => false, 'is_active' => true]
+        );
     }
 }
