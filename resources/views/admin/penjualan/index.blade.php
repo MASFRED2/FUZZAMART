@@ -76,12 +76,12 @@ function ambilDataBarang(keyword){
 
 function tambahKeKeranjang(barang){
     if(Number(barang.stok_total) <= 0){ toast('Stok ' + barang.nama_barang + ' habis.', 'warning'); return; }
-    let index = keranjang.findIndex(item => item.id === barang.id);
+    let index = keranjang.findIndex(item => item.barang_satuan_id === barang.barang_satuan_id);
     if(index >= 0){
         if(keranjang[index].qty + 1 > barang.stok_total){ toast('Stok tidak mencukupi. Sisa: ' + barang.stok_total, 'warning'); return; }
         keranjang[index].qty++;
     } else {
-        keranjang.push({ id: barang.id, barcode: barang.barcode, nama_barang: barang.nama_barang, harga: Number(barang.harga_final || barang.harga_jual), stok_maksimal: Number(barang.stok_total), qty: 1, ada_diskon: barang.ada_diskon });
+        keranjang.push({ id: barang.id, barang_satuan_id: barang.barang_satuan_id, barcode: barang.barcode, nama_barang: barang.nama_barang, satuan: barang.satuan, konversi_satuan: Number(barang.konversi_satuan), harga_normal: Number(barang.harga_jual), harga: Number(barang.harga_final || barang.harga_jual), stok_maksimal: Number(barang.stok_total), qty: 1, ada_diskon: barang.ada_diskon, diskon: barang.diskon });
     }
     renderKeranjang();
 }
@@ -94,9 +94,10 @@ function renderKeranjang(){
         hitungTotal(); return;
     }
     keranjang.forEach((item, index) => {
+        item.harga = hitungHargaItem(item);
         const subtotal = item.harga * item.qty;
         body.innerHTML += `<tr>
-            <td><strong>${item.nama_barang}</strong><br><small class="text-muted">${item.barcode}${item.ada_diskon ? ' · diskon aktif' : ''}</small></td>
+            <td><strong>${item.nama_barang}</strong> <span class="badge badge-light border">${item.satuan || 'pcs'}</span><br><small class="text-muted">${item.barcode}${item.konversi_satuan > 1 ? ' · isi ' + item.konversi_satuan + ' satuan dasar' : ''}${item.ada_diskon ? ' · diskon aktif' : ''}</small></td>
             <td>${formatRupiah(item.harga)}</td>
             <td><input type="number" class="form-control qty-control" value="${item.qty}" min="1" max="${item.stok_maksimal}" onchange="updateQty(${index}, this.value)"></td>
             <td><strong>${formatRupiah(subtotal)}</strong></td>
@@ -104,6 +105,13 @@ function renderKeranjang(){
         </tr>`;
     });
     hitungTotal();
+}
+
+function hitungHargaItem(item){
+    const hargaNormal = Number(item.harga_normal ?? item.harga ?? 0);
+    if(!item.diskon || Number(item.qty) < Number(item.diskon.minimal_beli || 1)) return hargaNormal;
+    if(item.diskon.jenis === 'persentase') return Math.max(0, hargaNormal - (hargaNormal * Number(item.diskon.nilai || 0) / 100));
+    return Math.max(0, hargaNormal - Number(item.diskon.nilai || 0));
 }
 
 function updateQty(index, value){
@@ -116,8 +124,18 @@ function updateQty(index, value){
 function hapusItem(index){ keranjang.splice(index,1); renderKeranjang(); }
 function kosongkanKeranjang(){ if(keranjang.length && !confirm('Kosongkan keranjang?')) return; keranjang=[]; localStorage.removeItem('draft_pos_fuzza'); renderKeranjang(); inputBarcode.focus(); }
 function simpanDraft(){ localStorage.setItem('draft_pos_fuzza', JSON.stringify(keranjang)); toast('Transaksi berhasil di-hold di browser ini.', 'success'); }
-function loadDraft(){ const draft = localStorage.getItem('draft_pos_fuzza'); if(draft && confirm('Ada transaksi hold. Muat kembali?')){ keranjang = JSON.parse(draft); renderKeranjang(); } }
-function hitungTotal(){ const total = keranjang.reduce((sum,item)=>sum+(item.harga*item.qty),0); document.getElementById('total_tampilan').dataset.total = total; document.getElementById('total_tampilan').innerText = formatRupiah(total); hitungKembalian(); }
+function loadDraft(){
+    const draft = localStorage.getItem('draft_pos_fuzza');
+    if(!draft) return;
+    const data = JSON.parse(draft);
+    if(!Array.isArray(data) || data.some(item => !item.barang_satuan_id)){
+        localStorage.removeItem('draft_pos_fuzza');
+        toast('Draft lama dihapus karena format satuan barang telah diperbarui.', 'info');
+        return;
+    }
+    if(confirm('Ada transaksi hold. Muat kembali?')){ keranjang = data; renderKeranjang(); }
+}
+function hitungTotal(){ const total = keranjang.reduce((sum,item)=>sum+(hitungHargaItem(item)*item.qty),0); document.getElementById('total_tampilan').dataset.total = total; document.getElementById('total_tampilan').innerText = formatRupiah(total); hitungKembalian(); }
 function hitungKembalian(){ const total = Number(document.getElementById('total_tampilan').dataset.total || 0); const bayar = Number(nominalBayar.value || 0); document.getElementById('kembalian_tampilan').innerText = formatRupiah(Math.max(0, bayar-total)); }
 function cariBarangManual(){ const key = prompt('Masukkan nama barang atau barcode:'); if(key) ambilDataBarang(key); }
 

@@ -39,8 +39,14 @@
                                     <i class="fas fa-handshake mr-1"></i> {{ $sm->pemasok->nama_pemasok ?? 'Tanpa Vendor' }}
                                 </span>
                             </td>
-                            <td><span class="font-weight-bold" style="color: #334155;">{{ $sm->jumlah_masuk }}</span> pcs</td>
-                            <td>Rp {{ number_format($sm->harga_beli, 0, ',', '.') }}</td>
+                            <td>
+                                <span class="font-weight-bold" style="color: #334155;">{{ $sm->jumlah_kemasan ?? $sm->jumlah_masuk }}</span> {{ $sm->satuan_masuk ?? $sm->barang->satuan ?? 'pcs' }}
+                                @if(($sm->konversi_satuan ?? 1) > 1)<br><small class="text-muted">Setara {{ $sm->jumlah_masuk }} {{ $sm->barang->satuan }}</small>@endif
+                            </td>
+                            <td>
+                                Rp {{ number_format($sm->harga_beli_kemasan ?? $sm->harga_beli, 0, ',', '.') }}
+                                <br><small class="text-muted">per {{ $sm->satuan_masuk ?? $sm->barang->satuan ?? 'pcs' }}</small>
+                            </td>
                             <td>
                                 @if($sm->tgl_kadaluwarsa)
                                     <span class="badge {{ $sm->tgl_kadaluwarsa->isPast() ? 'badge-danger' : 'badge-warning text-white' }} px-2 py-1">
@@ -70,12 +76,17 @@
             <div class="modal-body px-4 py-0">
                 <div class="form-group mb-3">
                     <label class="small font-weight-bold text-uppercase text-muted">Pilih Barang</label>
-                    <select name="barang_id" class="form-control" required style="border-radius: 8px;">
-                        <option value="">-- Pilih item barang --</option>
+                    <select name="barang_satuan_id" id="barang_satuan_id" class="form-control" required style="border-radius: 8px;">
+                        <option value="">-- Pilih barang dan kemasan --</option>
                         @foreach($barang as $b)
-                            <option value="{{ $b->id }}">{{ $b->nama_barang }} (Stok saat ini: {{ $b->stok_total }})</option>
+                            @foreach($b->satuan_produk as $unit)
+                                <option value="{{ $unit->id }}" data-satuan="{{ $unit->satuan?->simbol ?? $b->satuan }}" data-konversi="{{ $unit->konversi_satuan }}" data-dasar="{{ $b->satuan }}">
+                                    {{ $b->nama_barang }} — {{ $unit->satuan?->simbol ?? $b->satuan }}{{ $unit->konversi_satuan > 1 ? ' (isi '.$unit->konversi_satuan.' '.$b->satuan.')' : '' }}
+                                </option>
+                            @endforeach
                         @endforeach
                     </select>
+                    <small id="info_konversi" class="text-muted">Pilih kemasan barang yang diterima.</small>
                 </div>
                 
                 <div class="form-group mb-3">
@@ -90,12 +101,12 @@
 
                 <div class="row">
                     <div class="col-md-6 form-group mb-3">
-                        <label class="small font-weight-bold text-uppercase text-muted">Jumlah Masuk</label>
-                        <input type="number" name="jumlah_masuk" class="form-control" min="1" placeholder="0" required style="border-radius: 8px;">
+                        <label class="small font-weight-bold text-uppercase text-muted">Jumlah Kemasan</label>
+                        <input type="number" name="jumlah_kemasan" class="form-control" min="1" placeholder="0" required style="border-radius: 8px;">
                     </div>
                     <div class="col-md-6 form-group mb-3">
-                        <label class="small font-weight-bold text-uppercase text-muted">Harga Beli / Pcs</label>
-                        <input type="number" name="harga_beli" class="form-control" placeholder="Rp" required style="border-radius: 8px;">
+                        <label class="small font-weight-bold text-uppercase text-muted">Harga Beli / Kemasan</label>
+                        <input type="number" name="harga_beli_kemasan" class="form-control" min="0" placeholder="Rp" required style="border-radius: 8px;">
                     </div>
                 </div>
 
@@ -112,3 +123,14 @@
     </div>
 </div>
 @endsection
+
+@push('scripts')
+<script>
+document.getElementById('barang_satuan_id')?.addEventListener('change', function () {
+    const option = this.options[this.selectedIndex];
+    const info = document.getElementById('info_konversi');
+    if(!option.value){ info.innerText = 'Pilih kemasan barang yang diterima.'; return; }
+    info.innerText = `1 ${option.dataset.satuan} menambah ${option.dataset.konversi} ${option.dataset.dasar} ke stok.`;
+});
+</script>
+@endpush

@@ -69,7 +69,7 @@
             <td colspan="2" class="font-bold">{{ $detail->barang->nama_barang }}</td>
         </tr>
         <tr>
-            <td>{{ $detail->qty }} x {{ number_format($detail->harga_satuan, 0, ',', '.') }}</td>
+            <td>{{ $detail->jumlah_tampil }} {{ $detail->satuan_tampil }} x {{ number_format($detail->harga_satuan, 0, ',', '.') }}</td>
             <td class="text-right">{{ number_format($detail->subtotal, 0, ',', '.') }}</td>
         </tr>
         @endforeach

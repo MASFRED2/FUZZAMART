@@ -12,6 +12,7 @@ use App\Http\Controllers\PengeluaranController;
 use App\Http\Controllers\PenjualanController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ReturPenjualanController;
+use App\Http\Controllers\SatuanController;
 use App\Http\Controllers\ShiftController;
 use App\Http\Controllers\StockOpnameController;
 use App\Http\Controllers\StokMasukController;
@@ -27,9 +28,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 
     Route::middleware(['role:admin,kasir'])->group(function () {
-        Route::resource('kategori', KategoriController::class)->except(['create', 'show', 'edit']);
-        Route::resource('barang', BarangController::class)->except(['create', 'show', 'edit']);
-        Route::resource('stok-masuk', StokMasukController::class)->only(['index', 'store']);
         Route::resource('retur', ReturPenjualanController::class)->only(['index', 'store']);
         Route::get('/ambil-invoice/{no_invoice}', [ReturPenjualanController::class, 'getInvoice'])->name('retur.ambil-invoice');
 
@@ -45,6 +43,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     });
 
     Route::middleware(['role:admin'])->group(function () {
+        Route::resource('kategori', KategoriController::class)->except(['create', 'show', 'edit']);
+        Route::resource('satuan', SatuanController::class)->except(['create', 'show', 'edit']);
+        Route::resource('barang', BarangController::class)->except(['create', 'show', 'edit']);
+        Route::resource('stok-masuk', StokMasukController::class)->only(['index', 'store']);
         Route::resource('diskon', DiskonController::class)->except(['create', 'show', 'edit', 'update']);
         Route::resource('cabang', CabangController::class)->except(['create', 'show', 'edit']);
         Route::resource('pemasok', PemasokController::class)->except(['create', 'show', 'edit']);

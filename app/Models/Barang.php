@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Barang extends Model
 {
@@ -67,6 +68,16 @@ class Barang extends Model
         return $this->hasMany(KartuStok::class, 'barang_id');
     }
 
+    public function satuan_produk(): HasMany
+    {
+        return $this->hasMany(BarangSatuan::class, 'barang_id');
+    }
+
+    public function satuan_dasar(): HasOne
+    {
+        return $this->hasOne(BarangSatuan::class, 'barang_id')->where('is_default', true);
+    }
+
     public function scopeAktif($query)
     {
         return $query->where('is_active', true);
@@ -94,12 +105,11 @@ class Barang extends Model
             ->first();
     }
 
-    public function hargaSetelahDiskon(): float
+    public function hitungHargaSetelahDiskon(float $harga, int $qty = 1): float
     {
-        $harga = (float) $this->harga_jual;
         $diskon = $this->diskon_aktif();
 
-        if (!$diskon) {
+        if (!$diskon || $qty < (int) $diskon->minimal_beli) {
             return $harga;
         }
 
@@ -108,5 +118,10 @@ class Barang extends Model
         }
 
         return max(0, $harga - (float) $diskon->nilai_diskon);
+    }
+
+    public function hargaSetelahDiskon(int $qty = 1): float
+    {
+        return $this->hitungHargaSetelahDiskon((float) $this->harga_jual, $qty);
     }
 }

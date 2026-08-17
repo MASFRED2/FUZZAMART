@@ -2,41 +2,49 @@
 
 namespace App\Models;
 
+use Illuminate\Contracts\Auth\MustVerifyEmail;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
-use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-class User extends Authenticatable
+class User extends Authenticatable implements MustVerifyEmail
 {
-    use Notifiable;
+    use HasFactory, Notifiable;
 
     protected $fillable = [
-    'name',
-    'email',
-    'password',
-    'role',
-    'telepon',
-    'cabang_id',
-    'poin_loyalitas',
+        'name',
+        'email',
+        'password',
+        'role',
+        'telepon',
+        'cabang_id',
+        'poin_loyalitas',
     ];
 
     protected $hidden = [
-        'password', 'remember_token',
+        'password',
+        'remember_token',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'email_verified_at' => 'datetime',
+        ];
+    }
 
     public function cabang(): BelongsTo
     {
         return $this->belongsTo(Cabang::class, 'cabang_id');
     }
 
-    // Relasi ke transaksi (Jika user adalah Kasir)
     public function penjualan_kasir(): HasMany
     {
         return $this->hasMany(Penjualan::class, 'kasir_id');
     }
 
-    // Relasi ke transaksi (Jika user adalah Pelanggan)
     public function riwayat_belanja(): HasMany
     {
         return $this->hasMany(Penjualan::class, 'pelanggan_id');
